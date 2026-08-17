@@ -1,0 +1,234 @@
+{
+  "id": "ia_msxnygge16vdq1ke34",
+  "step": "user_approval",
+  "completed_steps": [
+    "planner",
+    "control_preview_runner",
+    "code_fixer",
+    "step_preview_runner",
+    "request_fulfillment_validator",
+    "css_selector_extractor",
+    "code_fixer",
+    "step_preview_runner",
+    "request_fulfillment_validator",
+    "css_selector_extractor",
+    "code_fixer",
+    "step_preview_runner",
+    "request_fulfillment_validator",
+    "step_advance"
+  ],
+  "status": "pending_answer",
+  "diff": {
+    "template_a": {
+      "_id": "6a835ed9f6d8089f903fd4d7",
+      "name": "New ide-automation template",
+      "steps": [
+        {
+          "name": "New ide-automation template",
+          "code": "\nnavigate(input.url);\n\n// Wait for key elements to be present\nwait('.WorkMeta-title, .WorkMeta-authors a, .WorkSelector-price .price, .AddToCartButton button');\n\ncollect(parse());\n",
+          "input": [
+            {
+              "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/"
+            }
+          ],
+          "fields": {
+            "url": {
+              "type": "url",
+              "required": true
+            }
+          },
+          "features": [
+            "cmd.navigate",
+            "cmd.wait",
+            "cmd.parse",
+            "cmd.collect"
+          ],
+          "worker": "browser",
+          "parser": {
+            "parser": "\n// Extract book title\nlet book_title = $('.WorkMeta-title').text_sane() || null;\n\n// Extract author name\nlet author_name = $('.WorkMeta-authors a').text_sane() || null;\n\n// Extract price - combine currency symbol and value\nlet price_value = $('.WorkSelector-price .price').text_sane();\nlet currency = 'USD'; // Based on $ symbol in the HTML\n\n// Create Money object if price exists\nlet price = price_value ? new Money(+price_value, currency) : null;\n\n// Determine availability status based on Add to Cart button presence\nlet availability_status = $('.AddToCartButton button').length > 0 ? 'In Stock' : 'Out of Stock';\n\nreturn {\n  book_title,\n  author_name,\n  price,\n  availability_status\n};\n",
+            "sandbox_version": 1,
+            "id": "p_msxmbmn7613hd6mvh.1"
+          },
+          "parse_code": "\n// Extract book title\nlet book_title = $('.WorkMeta-title').text_sane() || null;\n\n// Extract author name\nlet author_name = $('.WorkMeta-authors a').text_sane() || null;\n\n// Extract price - combine currency symbol and value\nlet price_value = $('.WorkSelector-price .price').text_sane();\nlet currency = 'USD'; // Based on $ symbol in the HTML\n\n// Create Money object if price exists\nlet price = price_value ? new Money(+price_value, currency) : null;\n\n// Determine availability status based on Add to Cart button presence\nlet availability_status = $('.AddToCartButton button').length > 0 ? 'In Stock' : 'Out of Stock';\n\nreturn {\n  book_title,\n  author_name,\n  price,\n  availability_status\n};\n"
+        }
+      ],
+      "visibility": "private",
+      "user": "dca_freelancer@brightdata.com",
+      "status": {
+        "value": "development",
+        "last_modified": {
+          "date": "2026-08-17T19:19:53.439Z",
+          "email": "dca_freelancer@brightdata.com"
+        }
+      },
+      "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/",
+      "use_case": "other",
+      "customer": "hl_8aa4b9eb",
+      "sandbox_version": 1,
+      "example_input": [
+        {
+          "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/"
+        }
+      ],
+      "example_output": "{\"book_title\":\"Sapiens: A Brief History of Humankind\",\"author_name\":\"Yuval Noah Harari\",\"price\":{\"value\":11.49,\"currency\":\"USD\"},\"availability_status\":\"In Stock\"}",
+      "output_fields": {
+        "type": "object",
+        "fields": {
+          "book_title": {
+            "type": "text"
+          },
+          "author_name": {
+            "type": "text"
+          },
+          "price": {
+            "type": "price"
+          },
+          "availability_status": {
+            "type": "text"
+          }
+        }
+      },
+      "features": [
+        "cmd.navigate",
+        "cmd.wait",
+        "cmd.parse",
+        "cmd.collect"
+      ],
+      "shared_libs": [],
+      "source": "dca-ide-automation-78bc445f57-m69cq",
+      "customer_id": "hl_8aa4b9eb",
+      "code_environment": "intent",
+      "id": "t_msxmbmn3rvd6bd44c.1",
+      "family": "t_msxmbmn3rvd6bd44c",
+      "patch": 1,
+      "version": "1",
+      "domain": "www.thriftbooks.com",
+      "discovery": false,
+      "last_modified": {
+        "email": "dca_freelancer@brightdata.com",
+        "date": "2026-08-17T19:19:53.443Z"
+      },
+      "is_development": true
+    },
+    "template_b": {
+      "_id": {
+        "buffer": {
+          "0": 106,
+          "1": 131,
+          "2": 94,
+          "3": 217,
+          "4": 246,
+          "5": 216,
+          "6": 8,
+          "7": 159,
+          "8": 144,
+          "9": 63,
+          "10": 212,
+          "11": 215
+        }
+      },
+      "name": "New ide-automation template",
+      "steps": [
+        {
+          "name": "New ide-automation template",
+          "code": "navigate(input.url);\n\n// Wait for key elements to be present\nwait('.WorkMeta-title, .WorkMeta-authors a, .WorkSelector-price, .AddToCartButton button');\n\ncollect(parse());",
+          "input": [
+            {
+              "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/"
+            }
+          ],
+          "fields": {
+            "url": {
+              "type": "url",
+              "required": true
+            }
+          },
+          "features": [
+            "cmd.navigate",
+            "cmd.wait",
+            "cmd.parse",
+            "cmd.collect"
+          ],
+          "worker": "browser",
+          "parser": {
+            "parser": "// Extract book title\nlet book_title = $('.WorkMeta-title').text_sane() || null;\n\n// Extract author name\nlet author_name = $('.WorkMeta-authors a').text_sane() || null;\n\n// Extract price - get currency symbol and value separately for robustness\nlet currency_symbol = $('.WorkSelector-price span').first().text_sane();\nlet price_value_text = $('.WorkSelector-price .price').text_sane();\n\n// Determine currency code from symbol\nlet currency = 'USD';\nif (currency_symbol) {\n  const currency_map = {'$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY'};\n  currency = currency_map[currency_symbol] || 'USD';\n}\n\n// Create Money object if price exists\nlet price = price_value_text ? new Money(parseFloat(price_value_text), currency) : null;\n\n// Determine availability status based on Add to Cart button presence\nlet availability_status = $('.AddToCartButton button').length > 0 ? 'In Stock' : 'Out of Stock';\n\nreturn {\n  book_title,\n  author_name,\n  price,\n  availability_status\n};",
+            "sandbox_version": 1,
+            "id": "p_msxmbmn7613hd6mvh.1"
+          },
+          "parse_code": "// Extract book title\nlet book_title = $('.WorkMeta-title').text_sane() || null;\n\n// Extract author name\nlet author_name = $('.WorkMeta-authors a').text_sane() || null;\n\n// Extract price - get currency symbol and value separately for robustness\nlet currency_symbol = $('.WorkSelector-price span').first().text_sane();\nlet price_value_text = $('.WorkSelector-price .price').text_sane();\n\n// Determine currency code from symbol\nlet currency = 'USD';\nif (currency_symbol) {\n  const currency_map = {'$': 'USD', '€': 'EUR', '£': 'GBP', '¥': 'JPY'};\n  currency = currency_map[currency_symbol] || 'USD';\n}\n\n// Create Money object if price exists\nlet price = price_value_text ? new Money(parseFloat(price_value_text), currency) : null;\n\n// Determine availability status based on Add to Cart button presence\nlet availability_status = $('.AddToCartButton button').length > 0 ? 'In Stock' : 'Out of Stock';\n\nreturn {\n  book_title,\n  author_name,\n  price,\n  availability_status\n};"
+        }
+      ],
+      "visibility": "private",
+      "user": "dca_freelancer@brightdata.com",
+      "status": {
+        "value": "development",
+        "last_modified": {
+          "date": "2026-08-17T19:19:53.439Z",
+          "email": "dca_freelancer@brightdata.com"
+        }
+      },
+      "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/",
+      "use_case": "other",
+      "customer": "hl_8aa4b9eb",
+      "sandbox_version": 1,
+      "example_input": [
+        {
+          "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/"
+        }
+      ],
+      "example_output": "{\"book_title\":\"Sapiens: A Brief History of Humankind\",\"author_name\":\"Yuval Noah Harari\",\"price\":{\"value\":11.49,\"currency\":\"USD\"},\"availability_status\":\"In Stock\"}",
+      "output_fields": {
+        "type": "object",
+        "fields": {
+          "book_title": {
+            "type": "text"
+          },
+          "author_name": {
+            "type": "text"
+          },
+          "price": {
+            "type": "price"
+          },
+          "availability_status": {
+            "type": "text"
+          }
+        }
+      },
+      "features": [
+        "cmd.navigate",
+        "cmd.wait",
+        "cmd.parse",
+        "cmd.collect"
+      ],
+      "shared_libs": [],
+      "source": "dca-ide-automation-78bc445f57-m69cq",
+      "customer_id": "hl_8aa4b9eb",
+      "code_environment": "intent",
+      "id": "t_msxmbmn3rvd6bd44c.1",
+      "family": "t_msxmbmn3rvd6bd44c",
+      "patch": 1,
+      "version": "1",
+      "domain": "www.thriftbooks.com",
+      "discovery": false,
+      "last_modified": {
+        "email": "dca_freelancer@brightdata.com",
+        "date": "2026-08-17T19:19:53.443Z"
+      },
+      "is_development": true
+    },
+    "title": "View refactor changes",
+    "user": "<redacted>"
+  },
+  "success": true,
+  "preview_result": [
+    {
+      "book_title": "Sapiens: A Brief History of Humankind",
+      "author_name": "Yuval Noah Harari",
+      "price": {
+        "value": 11.49,
+        "currency": "USD"
+      },
+      "availability_status": "In Stock"
+    }
+  ]
+}

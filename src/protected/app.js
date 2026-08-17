@@ -21,6 +21,7 @@
 //   node src/protected/app.js --no-heal          # validate and fall back only
 //   node src/protected/app.js --no-approve       # stop at the approval gate
 //   node src/protected/app.js --no-reverify      # skip the post-heal re-run
+//   node src/protected/app.js --force-heal       # ignore the heal cooldown
 
 import { fetchThroughAirlock } from '../airlock/index.js';
 import { DEFAULT_URL } from '../config.js';
@@ -34,6 +35,7 @@ function parseArgs(argv) {
     autoApprove: true,
     reverify: true,
     dryRunHeal: false,
+    healCooldownMs: undefined,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -55,6 +57,11 @@ function parseArgs(argv) {
         break;
       case '--dry-run-heal':
         args.dryRunHeal = true;
+        break;
+      // Demo handle: the 10-minute cooldown is right in production but gets in
+      // the way when deliberately running the loop twice in a row on stage.
+      case '--force-heal':
+        args.healCooldownMs = 0;
         break;
       default:
         break;
@@ -118,14 +125,28 @@ function narrate(event) {
     case 'heal_progress':
       console.log(dim(`  healing… step: ${event.step}`));
       break;
-    case 'heal_awaiting_approval':
+    case 'heal_awaiting_approval': {
       console.log(
         yellow(
           `  heal awaiting approval — ${event.summary.correctionLoops} correction loop(s), `
             + `${event.summary.proposedTemplateSteps ?? '?'} proposed step(s)`
         )
       );
+      // The proposed fix is checked against the same rules as live data before
+      // it is accepted, so a heal that "succeeded" can still be turned down.
+      const { action, failures } = event.assessment;
+      if (action === 'approve') {
+        console.log(green('  proposed output passes every rule — approving'));
+      } else if (action === 'reject') {
+        console.log(red('  proposed output BREAKS the contract — rejecting the fix:'));
+        for (const failure of failures) {
+          console.log(red(`    ${failure.field}: expected ${failure.expectation}, got ${failure.actualDescription}`));
+        }
+      } else {
+        console.log(yellow('  no preview to verify — leaving the heal for human review'));
+      }
       break;
+    }
     case 'heal_approved':
       console.log(dim('  approved the proposed fix'));
       break;
@@ -221,6 +242,20 @@ function statusLines(result) {
       : `${heal.outcome}${heal.approved ? ', auto-approved' : ''}`;
     lines.push(textLine(`  heal: ${state}`));
     if (heal.error) lines.push(textLine(`        ${heal.error}`));
+
+    if (heal.summary) {
+      lines.push(
+        textLine(`        ${heal.summary.correctionLoops} correction loop(s) needed`)
+      );
+    }
+
+    // Why a proposed fix was accepted or turned down.
+    if (heal.assessment) {
+      lines.push(textLine(`        proposed fix: ${heal.assessment.reason.replace(/_/g, ' ')}`));
+      for (const failure of heal.assessment.failures) {
+        lines.push(textLine(`          would break ${failure.field} (${failure.actualDescription})`));
+      }
+    }
   }
 
   if (result.reverification) {
@@ -251,6 +286,7 @@ const result = await fetchThroughAirlock(args.url, {
   autoApprove: args.autoApprove,
   reverify: args.reverify,
   dryRunHeal: args.dryRunHeal,
+  healCooldownMs: args.healCooldownMs,
   onEvent: narrate,
 });
 

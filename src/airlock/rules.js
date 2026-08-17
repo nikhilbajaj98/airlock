@@ -56,6 +56,17 @@ export const RULES = [
     healHint: 'Report the price currency as a three-letter code such as "USD".',
   },
   {
+    // Added after a real heal proposed a template that dropped this field. Both
+    // consumer apps render it, so leaving it out of the contract meant a "valid"
+    // response could still render "undefined11.49 USD". The rule to draw from
+    // that: every field the consumer renders must be a field the rules cover.
+    name: 'symbol',
+    path: ['price', 'symbol'],
+    expectation: 'a non-empty currency symbol string, e.g. "$"',
+    check: isNonEmptyString,
+    healHint: 'Keep reporting the currency symbol shown on the page, such as "$".',
+  },
+  {
     name: 'availability',
     path: ['availability_status'],
     expectation: `one of ${ALLOWED_AVAILABILITY.map((v) => `"${v}"`).join(' or ')} (any capitalisation)`,

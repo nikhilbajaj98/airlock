@@ -24,6 +24,7 @@ import { runCollector } from '../collector.js';
 import { validateResponse } from './validator.js';
 import { buildHealPrompt } from './healPrompt.js';
 import { awaitHeal, resumeHeal, summarizeHeal, triggerHeal } from './heal.js';
+import { assessProposedFix } from './previewGate.js';
 import { appendHealLog, lastHealAt, readLastKnownGood, writeLastKnownGood } from './store.js';
 
 /** Default gap enforced between heals of the same collector: 10 minutes. */
@@ -90,18 +91,46 @@ async function healCycle(failures, lastKnownGood, options) {
     let approved = false;
 
     if (outcome === 'awaiting_approval') {
-      emit(onEvent, { type: 'heal_awaiting_approval', summary: summarizeHeal(progress) });
+      const summary = summarizeHeal(progress);
+      // Hold the proposed fix to the same rules as live data before accepting it.
+      const assessment = assessProposedFix(progress);
+
+      emit(onEvent, { type: 'heal_awaiting_approval', summary, assessment });
+
       if (!autoApprove) {
+        return { prompt, triggered: true, outcome, approved: false, summary, assessment };
+      }
+
+      // The proposed output breaks the contract. Approving it would swap one bad
+      // response for another, so it is rejected and the collector left alone.
+      if (assessment.action === 'reject') {
+        const rejected = await resumeHeal({ collectorId, approve: false, onEvent });
         return {
           prompt,
           triggered: true,
-          outcome,
+          outcome: 'rejected_bad_preview',
           approved: false,
-          summary: summarizeHeal(progress),
+          summary,
+          assessment,
+          afterReject: rejected.outcome,
         };
       }
+
+      // No preview to verify — defer rather than guess in either direction.
+      if (assessment.action === 'park') {
+        return { prompt, triggered: true, outcome, approved: false, summary, assessment };
+      }
+
       approved = true;
       ({ outcome, progress } = await resumeHeal({ collectorId, onEvent }));
+      return {
+        prompt,
+        triggered: true,
+        outcome,
+        approved,
+        summary: summarizeHeal(progress),
+        assessment,
+      };
     }
 
     emit(onEvent, { type: 'heal_settled', outcome });
@@ -212,7 +241,11 @@ export async function fetchThroughAirlock(url, options = {}) {
 
   // 5. Re-verification — a completed heal is a claim, not a guarantee. Live data
   //    is only trusted again once a fresh run passes the same rules.
-  if (reverify && served.heal.outcome === 'done' && !fixture) {
+  //
+  //    This runs even when the failure was replayed from a fixture: the heal
+  //    itself was real and really changed the collector, so the check has to be
+  //    real too. Only a dry-run or rejected heal leaves nothing to re-verify.
+  if (reverify && served.heal.outcome === 'done') {
     emit(onEvent, { type: 'reverify_start' });
     try {
       const rerun = await runCollector(url, {

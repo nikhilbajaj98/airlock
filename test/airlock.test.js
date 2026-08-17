@@ -41,9 +41,16 @@ test('a validated collector row passes every rule', () => {
   assert.deepEqual(validateRow(goodRow).failures, []);
 });
 
-test('a dead price selector fails the price and currency rules only', () => {
-  // This is the real failure shape: the whole price object comes back null.
-  assert.deepEqual(failedRules({ ...goodRow, price: null }), ['currency', 'price']);
+test('a dead price selector fails every rule that reads through price', () => {
+  // This is the real failure shape: the whole price object comes back null, so
+  // value, currency and symbol all go with it.
+  assert.deepEqual(failedRules({ ...goodRow, price: null }), ['currency', 'price', 'symbol']);
+});
+
+test('a price missing only its symbol fails just the symbol rule', () => {
+  // The shape a real heal proposed: a working price with the symbol dropped.
+  const row = { ...goodRow, price: { value: 11.49, currency: 'USD' } };
+  assert.deepEqual(failedRules(row), ['symbol']);
 });
 
 test('a price returned as a string fails, even when it looks right', () => {
