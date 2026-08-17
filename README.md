@@ -3,50 +3,77 @@
 A validation and continuity layer for Bright Data Scraper Studio collectors.
 Built for the WeMakeDevs **Scrape-Verse** hackathon (Aug 17–23, 2026).
 
-> "An AI agent checks Eventbrite for ticket availability. Overnight, Eventbrite
-> redesigns their page, and the scraper starts silently returning empty data —
-> not an error, just nothing. Today, that bad data flows straight to whoever's
-> relying on it until a human happens to notice and manually fixes it. Airlock
-> sits between the scraper and the app: the instant bad data shows up, it
-> blocks it, keeps serving the last good value so nothing breaks, and
-> automatically triggers Bright Data's self-healing — no human required. What
-> Bright Data promises — 'nothing downstream ever sees a gap' — Airlock is
-> what actually makes that true."
+> An AI shopping agent watches a book's price and stock status. Overnight the
+> bookstore reworks its markup, and the scraper starts returning a price of
+> `null` — not an error, just nothing. Today that empty value flows straight to
+> whoever relies on it until a human notices and manually runs a heal. Airlock
+> sits between the scraper and the app: the instant bad data appears, it blocks
+> it, keeps serving the last good value so nothing breaks, and automatically
+> triggers Bright Data's self-healing — then refuses the fix if the fix is also
+> wrong. What Scraper Studio promises, "nothing downstream ever sees a gap,"
+> Airlock is what actually makes true.
 
 ## The problem
 
-Scraper Studio's self-healing is genuinely powerful, but today it's
-reactive: a human has to notice extraction broke, then manually run
-`scraper heal` with a description of what changed. In the meantime the
-scraper doesn't error — it returns a "successful" response with fields
-silently missing or null. Anything downstream that trusts this blindly
-acts on garbage: wrong prices, false "sold out" states, stale data — for
-hours or days before anyone notices.
+Scraper Studio's self-healing is genuinely powerful, but today it is reactive: a
+human has to notice extraction broke, then manually run `scraper heal` with a
+description of what changed. In the meantime the scraper does not error — it
+returns a "successful" response with fields silently missing or null. Anything
+downstream that trusts this blindly acts on garbage: wrong prices, false
+"sold out" states, stale data, for hours or days before anyone notices.
+
+This is not hypothetical. Both halves of it happened during this build.
+
+**A selector died silently.** An earlier version of this project targeted
+Eventbrite event pages. The ticket-price selector,
+`.LiveEventPanelInfo-module-scss-module___rD3Sa__container`, was a hashed
+CSS-module class name that changed on a frontend rebuild. Every run afterwards
+reported success and returned `null` for price on confirmed-paid events. Two
+`scraper heal` attempts and a manual edit to the parse code did not recover it,
+and the collector's locked output schema then began rejecting edited runs with
+`output_schema_incompatible` (422). Nothing anywhere said "this is broken" —
+which is exactly the failure Airlock detects.
+
+**Then a heal proposed a regression.** With Airlock running against the current
+collector, a real heal completed successfully and proposed a template that
+quietly dropped `price.symbol` — a field the consumer app renders. Reported as a
+success; would have rendered `undefined11.49 USD`. A second heal dropped the same
+field again, even though the generated prompt explicitly asked to keep it. See
+[`example-output/heal-awaiting-approval.json`](example-output/heal-awaiting-approval.json).
+
+So a self-healing loop needs a verifier at **both** ends: one that decides a
+response is broken, and one that decides a proposed fix is real.
 
 ## The solution
 
-Airlock sits between a Scraper Studio collector and whatever consumes its
-data:
+Airlock sits between a Scraper Studio collector and whatever consumes its data:
 
-1. You define validation rules for what a valid response looks like
-   (e.g. `price: number > 0`, `availability: number OR "sold out"`).
+1. You define validation rules for what a valid response looks like — for this
+   collector, `price.value` must be a number greater than 0, `availability_status`
+   must be one of two known values, and so on
+   ([`src/airlock/rules.js`](src/airlock/rules.js)).
 2. Every collector run is validated against those rules.
-3. **Valid** → data passes straight through.
+3. **Valid** → data passes straight through, and is remembered as
+   last-known-good.
 4. **Invalid** → Airlock:
    - blocks the bad response from reaching the app
-   - serves the last-known-good value instead (clearly timestamped), so
-     nothing crashes or shows garbage
-   - auto-generates a natural-language description of what failed and
-     calls `scraper heal` on the same collector — no human writes the
-     prompt, no human notices first
-5. Once the heal completes, Airlock re-validates the fixed output against
-   its own rules before trusting it again, then resumes serving live data.
+   - serves the last-known-good value instead, clearly timestamped, so nothing
+     crashes or shows garbage
+   - generates a natural-language heal description from the specific rules that
+     failed and calls the collector's heal endpoint — no human writes the prompt,
+     no human notices first
+5. **Before approving the fix**, Airlock validates the proposed output — Scraper
+   Studio returns it as `preview_result` at the approval gate — against the same
+   rules. A fix that breaks a rule is rejected. A fix with no preview to check is
+   parked for a human, because rejecting a possibly-good fix is as harmful as
+   approving a bad one.
+6. **After a fix is approved**, Airlock re-runs the collector and re-validates
+   before trusting live data again. A completed heal is a claim, not a guarantee.
 
-Airlock doesn't just wrap the scraper — it drives the scraper's own
-lifecycle (create → run → detect break → heal → approve/re-verify) end to
-end, with no human in the loop. That's what makes **use of Scraper
-Studio** and **reliability / self-healing** — two of the six judged
-criteria — central to the project rather than incidental.
+Airlock does not just wrap the scraper — it drives the scraper's own lifecycle
+(create → run → detect break → heal → assess → approve/reject → re-verify) end to
+end, with no human in the loop. That is what makes **use of Scraper Studio** and
+**reliability / self-healing** central to the project rather than incidental.
 
 ## Architecture
 
@@ -54,84 +81,152 @@ criteria — central to the project rather than incidental.
 Scraper Studio collector runs
             |
             v
-     Airlock validator (checks response rules)
+     Airlock validator  (rules.js — every field the consumer renders)
        /                      \
   valid                     invalid
     |                          |
-Data passes through     Serve last-known-good (timestamped, blocks bad data)
+Data passes through     Block bad response, serve last-known-good (timestamped)
     |                          |
-Consuming app stays     Auto-triggers heal (prompt generated from failed rule)
-healthy, no gap                |
-                        Scraper Studio heals (planner / code_fixer / validator)
-                                |
-                        re-verify, then resume live data
+Remembered as           Generate heal prompt from the failed rules
+last-known-good                |
+    |                   POST /dca/collectors/<id>/refactor_template
+Consuming app stays            |
+healthy, no gap         Scraper Studio heals (planner / code_fixer / validator)
+                               |
+                        Approval gate — validate `preview_result`
+                          /              \
+                    passes rules      breaks rules
+                         |                  |
+                     approve            reject the fix,
+                         |              keep serving last-known-good
+                  re-run + re-validate
+                         |
+                  resume live data
 ```
-
-_(See the architecture diagram in this repo / hackathon submission for the
-visual version.)_
 
 ## Target site
 
-Custom Scraper Studio collector against public Eventbrite event listing
-pages, extracting: event name, date, ticket price, availability status
-(tickets remaining, or "sold out").
+A custom Scraper Studio collector (`airlock-books`) against public ThriftBooks
+book pages, extracting book title, author name, price (value, currency, symbol)
+and availability status. Validated clean across two different book URLs with
+matching field shapes and no schema drift — see
+[`example-output/`](example-output/).
 
-Chosen for public, low-anti-bot listing pages, high emotional stakes for
-the demo narrative (an agent wrongly saying tickets are sold out, or
-missing a real availability window), and visually strong event cards for
-a live demo.
-
-_Fallback targets if Eventbrite proves difficult during build:
-quick-commerce/grocery listing pages, then books matched by ISBN across
-independent bookstore sites, then books.toscrape.com as a zero-risk last
-resort._
+Chosen after two earlier targets were ruled out: Eventbrite, for the silent
+hashed-selector failure described above, which could not be recovered through
+either healing or manual edits; and Bookshop.org, which was blocked by a WAF at
+the browser level, not merely at the scraper level. Book pages turned out to be a
+better demo subject anyway — price and stock status are exactly the fields an
+agent would act on, and exactly the fields whose silent corruption does damage.
 
 ## Demo
 
-Two tiny consumer apps fed by the same collector, side by side:
+Two tiny consumer apps fed by the same collector, side by side in two terminals:
 
-- **Naive version** — wired directly to raw scraper output. Crashes or
-  shows garbage the moment a validation-breaking response comes through.
-- **Airlock-protected version** — same feed, through Airlock. Stays
-  healthy, shows last-known-good, auto-heals in the background.
+- **Naive version** ([`src/naive/app.js`](src/naive/app.js)) — wired directly to
+  raw scraper output. No validation, no fallback, no null guards. Crashes the
+  moment a validation-breaking response comes through.
+- **Airlock-protected version** ([`src/protected/app.js`](src/protected/app.js))
+  — same feed, same card, same rendering code, one line different. Stays healthy,
+  shows last-known-good with its age, names the rules that failed, and drives the
+  heal in the background.
 
-The failure is triggered live and on demand via `scraper heal` with a
-prompt describing a plausible field change — this doesn't depend on
-Eventbrite actually redesigning during the demo window.
+Both apps read fields without null guards. That is safe in exactly one of them,
+for exactly one reason: the row has already passed every rule.
+
+Full runbook, including the live heal and the refusal, in [`DEMO.md`](DEMO.md).
+
+```bash
+export BRIGHTDATA_API_KEY=...
+npm test                                    # 30 tests, nothing to install
+
+node src/protected/app.js                   # live run, seeds last-known-good
+node src/naive/app.js     --fixture fixtures/broken-price-null.json   # crashes
+node src/protected/app.js --fixture fixtures/broken-price-null.json   # survives
+```
+
+The failure is triggered on demand from a replayed response, and the heal it
+provokes is real — so the demo does not depend on ThriftBooks changing its layout
+during the submission window.
 
 ## How Scraper Studio is used
 
-- **Custom collector** built with Scraper Studio (not the pre-built
-  Scrapers Library) against Eventbrite event pages.
-- Airlock calls the collector's API endpoint programmatically for each
-  run, rather than shelling out to the CLI.
-- On a validation failure, Airlock calls `scraper heal` on the collector
-  itself, passing a description synthesized from the specific rule that
-  broke.
-- Airlock re-validates Scraper Studio's `awaiting_approval` result before
-  resuming live traffic.
+- **Custom collector** built with Scraper Studio (not the pre-built Scrapers
+  Library) against ThriftBooks book pages.
+- Airlock calls the collector's **API endpoints directly** from application code
+  rather than shelling out to the CLI, because nobody is at a terminal when a
+  break is detected:
+  - `POST /dca/trigger_immediate?collector=<id>` → poll `GET /dca/get_result`
+  - `POST /dca/collectors/<id>/refactor_template` to heal
+  - `GET /dca/collectors/<id>/refactor_template/progress` to follow it
+  - `POST /dca/collectors/<id>/resume_automation_job` to approve or reject
+- On a validation failure, Airlock heals the collector with a description
+  synthesized from the specific rules that broke.
+- At the approval gate, Airlock validates Scraper Studio's own `preview_result`
+  against those same rules before accepting the change.
+- After approval, Airlock re-runs and re-validates before resuming live traffic.
 
-## Stretch goal (only if core is solid)
+## What is proven, and what is not
 
-A risk-scoring layer on `awaiting_approval` heals, using signals already
-present in Scraper Studio's own output: how many `code_fixer`/`validator`
-correction loops it needed, how many fields the diff touches, and whether
-the proposed new value is plausible against the last-known-good. Low-risk
-heals auto-approve; risky ones get flagged for human review with the
-reasoning shown.
+Honesty matters more here than a tidy story.
 
-## AI-assistant usage disclosure
+**Observed live against the real collector:** detect → block → serve
+last-known-good → generate prompt → trigger heal → follow the flow to its
+approval gate → validate the proposed output → reject it → app still serving,
+exit 0. This ran twice, once human-answered and once fully autonomous.
 
-This project was built with the help of Claude (Anthropic) as a coding
-assistant for planning, architecture, and implementation. All submitted
-code, architecture, and decisions are understood by the author and can be
-explained directly to judges.
+**Not observed live:** the approve → re-verify → resume-live tail. Both real
+heals so far proposed output that broke the contract, so the gate rejected both
+and the approval path never executed against the API. It is implemented in
+[`src/airlock/index.js`](src/airlock/index.js) and unit-tested, but it has not
+been demonstrated end to end and is not claimed as such.
+
+**Known gap:** `ALLOWED_AVAILABILITY` in `rules.js` accepts `"in stock"` and
+`"out of stock"` case-insensitively. Only the in-stock case has been seen live, so
+a genuinely out-of-stock book could trip a false validation failure if
+ThriftBooks words it differently.
+
+## Reliability decisions worth explaining
+
+- **Transport errors do not trigger a heal.** A 500 or a timeout is not a broken
+  selector; healing cannot fix it. Those serve last-known-good and record the
+  error.
+- **Heals are rate-limited** to one per collector per 10 minutes, recorded in an
+  audit log. Repeatedly healing a collector degrades it, and Bright Data's
+  AI-Flow job cap would reject the calls anyway (the client backs off through
+  429s).
+- **The validator never throws.** A validator that can crash on malformed input
+  is no better than the naive app it replaces.
+- **Every field the consumer renders must be a field the rules cover.** This was
+  learned the hard way: `price.symbol` was rendered but unvalidated, which is
+  precisely how the first proposed regression slipped past.
+
+## Stretch goal
+
+Risk-scoring `awaiting_approval` heals using signals Scraper Studio already
+reports. The most valuable part of this is already built — the pre-approval gate
+validates the proposed output itself, which is a stronger signal than any
+heuristic. The remaining heuristics are surfaced but not yet scored:
+`summarizeHeal()` in [`src/airlock/heal.js`](src/airlock/heal.js) exposes how many
+`code_fixer` / `validator` correction loops the flow needed and how many steps the
+proposed template contains.
 
 ## Tech stack
 
-- Bright Data Scraper Studio (CLI + API) — mandatory hackathon tech
-- [collector runtime / backend — to be filled in during build]
-- [frontend for the naive vs. Airlock demo — to be filled in during build]
+- Bright Data Scraper Studio (CLI for authoring, HTTP API for everything Airlock
+  does) — mandatory hackathon tech
+- Node.js 22, ES modules, **zero runtime dependencies** — no framework, no
+  `node_modules`. Every line is walkable, which was a deliberate constraint:
+  everything submitted here has to be explainable to a judge on the spot.
+- `node:test` for the test suite (30 tests)
+- Terminal UI, shared by both consumer apps so they cannot drift apart
+
+## AI-assistant usage disclosure
+
+This project was built with the help of Claude (Anthropic) as a coding assistant
+— for planning and architecture in conversation, and for implementation in Claude
+Code. All submitted code, architecture, and decisions are understood by the author
+and can be explained directly to judges.
 
 ## Team
 
@@ -139,12 +234,12 @@ Solo submission.
 
 ## Status
 
-Submission checklist:
-
-- [ ] Public repo with clear commit history
-- [ ] README: problem, solution, architecture diagram, Scraper Studio
-      usage, AI-assistant disclosure
-- [ ] Example structured output from the custom scraper
-- [ ] Demo video: naive vs. Airlock side by side, including a live
-      auto-heal trigger
+- [x] Public repo with clear commit history
+- [x] README: problem, solution, architecture, Scraper Studio usage,
+      AI-assistant disclosure
+- [x] Custom Scraper Studio collector (not from the Scrapers Library)
+- [x] Example structured output — two clean runs plus a real heal gate payload
+- [x] Naive and Airlock-protected consumer apps, with the loop proven live
+- [ ] Demo video: naive vs. Airlock side by side, including the live heal and
+      the refusal ([`DEMO.md`](DEMO.md) is the script)
 - [ ] Submitted before the deadline (Aug 23, 2026)
