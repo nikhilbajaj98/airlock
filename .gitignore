@@ -1,0 +1,6 @@
+node_modules/
+.env
+.DS_Store
+
+# Airlock's local last-known-good store and heal logs (runtime state, not source)
+.airlock-state/

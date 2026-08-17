@@ -1,0 +1,14 @@
+{
+  "name": "airlock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Validation and continuity layer for Bright Data Scraper Studio collectors",
+  "type": "module",
+  "scripts": {
+    "naive": "node src/naive/app.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
