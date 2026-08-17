@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "naive": "node src/naive/app.js",
+    "protected": "node src/protected/app.js",
     "test": "node --test"
   },
   "engines": {

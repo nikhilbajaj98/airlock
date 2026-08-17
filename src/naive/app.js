@@ -24,6 +24,7 @@
 import { readFileSync } from 'node:fs';
 import { runCollector } from '../collector.js';
 import { DEFAULT_URL } from '../config.js';
+import { box, divider, fieldLine, textLine } from '../ui.js';
 
 function parseArgs(argv) {
   const args = { url: DEFAULT_URL, fixture: null };
@@ -35,17 +36,10 @@ function parseArgs(argv) {
 }
 
 // --- rendering -------------------------------------------------------------
-
-const BOX_WIDTH = 66;
-
-function truncate(text, max) {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
-
-function boxLine(label, value) {
-  const body = truncate(`${label.padEnd(14)}${value}`, BOX_WIDTH - 4);
-  return `│ ${body.padEnd(BOX_WIDTH - 4)} │`;
-}
+//
+// The box primitives are shared with the Airlock-protected app, so the two apps
+// present identically. The difference is entirely in the four lines below that
+// reach into the response.
 
 function renderBook(book) {
   // Every one of these reads assumes the field is present and the right type.
@@ -55,20 +49,14 @@ function renderBook(book) {
   const price = `${book.price.symbol}${book.price.value.toFixed(2)} ${book.price.currency}`;
   const availability = book.availability_status.toUpperCase();
 
-  const top = `┌${'─'.repeat(BOX_WIDTH - 2)}┐`;
-  const bottom = `└${'─'.repeat(BOX_WIDTH - 2)}┘`;
-  const divider = `├${'─'.repeat(BOX_WIDTH - 2)}┤`;
-
-  return [
-    top,
-    boxLine('', 'NAIVE CONSUMER  (no validation, no fallback)'),
+  return box([
+    textLine('NAIVE CONSUMER  (no validation, no fallback)'),
     divider,
-    boxLine('Title', title),
-    boxLine('Author', author),
-    boxLine('Price', price),
-    boxLine('Availability', availability),
-    bottom,
-  ].join('\n');
+    fieldLine('Title', title),
+    fieldLine('Author', author),
+    fieldLine('Price', price),
+    fieldLine('Availability', availability),
+  ]);
 }
 
 // --- main ------------------------------------------------------------------
