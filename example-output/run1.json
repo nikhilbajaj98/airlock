@@ -1,0 +1,11 @@
+[
+  {
+    "book_title": "Sapiens: A Brief History of Humankind",
+    "author_name": "Yuval Noah Harari",
+    "price": { "value": 11.49, "currency": "USD", "symbol": "$" },
+    "availability_status": "In Stock",
+    "input": {
+      "url": "https://www.thriftbooks.com/w/from-animals-into-gods-a-brief-history-of-humankind_yuval-noah-harari/1015082/"
+    }
+  }
+]
