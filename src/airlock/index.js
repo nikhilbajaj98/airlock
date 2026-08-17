@@ -175,6 +175,7 @@ export async function fetchThroughAirlock(url, options = {}) {
     validatedAt: null,
     ageMs: null,
     failures: [],
+    skipped: [],
     blockedRow: null,
     heal: null,
     reverification: null,
@@ -205,6 +206,7 @@ export async function fetchThroughAirlock(url, options = {}) {
   // 2. Validate.
   const verdict = validateResponse(run.rows);
   envelope.failures = verdict.failures;
+  envelope.skipped = verdict.skipped;
 
   // 3. Pass path — forward, and remember.
   if (verdict.valid) {

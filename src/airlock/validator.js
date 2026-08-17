@@ -66,10 +66,20 @@ export function validateRow(row) {
         healHint: rule.healHint,
       });
     }
-    return { valid: false, failures };
+    return { valid: false, failures, skipped: [] };
   }
 
+  const skipped = [];
+
   for (const rule of RULES) {
+    // Some rules only apply to some rows — a price is not expected on a book that
+    // is out of stock. Skipping is recorded rather than silent, so a response can
+    // never look fully checked when part of the contract was stood down.
+    if (rule.appliesWhen && !rule.appliesWhen(row)) {
+      skipped.push(rule.name);
+      continue;
+    }
+
     const read = readPath(row, rule.path);
     if (rule.check(read.value)) continue;
 
@@ -83,7 +93,7 @@ export function validateRow(row) {
     });
   }
 
-  return { valid: failures.length === 0, failures };
+  return { valid: failures.length === 0, failures, skipped };
 }
 
 /**
@@ -97,12 +107,19 @@ export function validateResponse(rows) {
     return {
       valid: false,
       failures,
+      skipped: [],
       row: null,
       reason: 'the collector returned no rows',
     };
   }
 
   const row = rows[0];
-  const { valid, failures } = validateRow(row);
-  return { valid, failures, row, reason: valid ? null : 'one or more field rules failed' };
+  const { valid, failures, skipped } = validateRow(row);
+  return {
+    valid,
+    failures,
+    skipped,
+    row,
+    reason: valid ? null : 'one or more field rules failed',
+  };
 }

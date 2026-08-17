@@ -22,6 +22,26 @@ const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !=
 const isPositiveNumber = (value) =>
   typeof value === 'number' && Number.isFinite(value) && value > 0;
 
+/** True only when the row explicitly says the book cannot be bought. */
+export const isOutOfStock = (row) =>
+  typeof row?.availability_status === 'string'
+  && row.availability_status.trim().toLowerCase() === 'out of stock';
+
+/**
+ * Whether a price is supposed to be present at all.
+ *
+ * Confirmed against a live out-of-stock page: ThriftBooks shows no price for a
+ * book it has no copies of, and the collector correctly returns no `price` field.
+ * That is right data, not a broken selector — so demanding a price there made
+ * Airlock block a correct response and, worse, fire a heal at a healthy
+ * collector. Exactly the false alarm this project is meant to avoid causing.
+ *
+ * Anything other than an explicit "out of stock" is treated as needing a price,
+ * so a garbled or missing availability value fails loudly rather than quietly
+ * excusing the price fields too.
+ */
+export const priceIsExpected = (row) => !isOutOfStock(row);
+
 export const RULES = [
   {
     name: 'title',
@@ -41,6 +61,7 @@ export const RULES = [
   },
   {
     name: 'price',
+    appliesWhen: priceIsExpected,
     path: ['price', 'value'],
     expectation: 'a number greater than 0',
     check: isPositiveNumber,
@@ -50,6 +71,7 @@ export const RULES = [
   },
   {
     name: 'currency',
+    appliesWhen: priceIsExpected,
     path: ['price', 'currency'],
     expectation: 'a non-empty currency code string, e.g. "USD"',
     check: isNonEmptyString,
@@ -61,6 +83,7 @@ export const RULES = [
     // response could still render "undefined11.49 USD". The rule to draw from
     // that: every field the consumer renders must be a field the rules cover.
     name: 'symbol',
+    appliesWhen: priceIsExpected,
     path: ['price', 'symbol'],
     expectation: 'a non-empty currency symbol string, e.g. "$"',
     check: isNonEmptyString,

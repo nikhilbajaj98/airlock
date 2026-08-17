@@ -181,10 +181,28 @@ and the approval path never executed against the API. It is implemented in
 [`src/airlock/index.js`](src/airlock/index.js) and unit-tested, but it has not
 been demonstrated end to end and is not claimed as such.
 
-**Known gap:** `ALLOWED_AVAILABILITY` in `rules.js` accepts `"in stock"` and
-`"out of stock"` case-insensitively. Only the in-stock case has been seen live, so
-a genuinely out-of-stock book could trip a false validation failure if
-ThriftBooks words it differently.
+**Both availability values are now confirmed live.** A genuinely unavailable book
+returns exactly `"Out of Stock"`
+([`example-output/run3-out-of-stock.json`](example-output/run3-out-of-stock.json)),
+and the collector normalises other page wordings — "Almost Gone, Only 1 Left!"
+comes back as `"In Stock"`.
+
+Checking that also found a bug in Airlock itself. ThriftBooks shows no price for a
+book it has no copies of, so the collector returns no `price` field — correct
+data that an unconditional `price.value > 0` rule rejected. Airlock blocked a good
+response and would have fired a heal at a healthy collector: the false alarm this
+project exists to avoid causing. The price rules are now conditional on the book
+being purchasable (`priceIsExpected` in [`src/airlock/rules.js`](src/airlock/rules.js)),
+and rules that are stood down for a row are reported as `skipped` rather than
+passing silently.
+
+**Known limitation — Airlock validates shape and domain, not truth.** A book on
+backorder ("On Backorder", $64.99, no Add to Cart) is reported by the collector as
+`"In Stock"`. That is wrong, but it is a legal value in a well-formed response, so
+no rule can catch it. Airlock detects missing, malformed and out-of-domain values;
+it cannot detect a plausible lie. Closing that would need either a rule with
+outside knowledge of the page, or a heal that teaches the collector to distinguish
+backorder from stocked.
 
 ## Reliability decisions worth explaining
 
@@ -200,6 +218,11 @@ ThriftBooks words it differently.
 - **Every field the consumer renders must be a field the rules cover.** This was
   learned the hard way: `price.symbol` was rendered but unvalidated, which is
   precisely how the first proposed regression slipped past.
+- **A rule that is right for most rows can be wrong for some.** Requiring a price
+  is correct for a book on sale and wrong for one that is out of stock. An
+  over-strict validator does real harm — it blocks good data and provokes
+  unnecessary heals — so rules carry an `appliesWhen` condition, and any rule
+  stood down for a row is reported rather than quietly skipped.
 
 ## Stretch goal
 

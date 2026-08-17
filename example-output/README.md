@@ -8,6 +8,7 @@ its heal lifecycle. Nothing here is hand-written.
 | `create.json` | Response from `scraper create` — the collector's id, name and generation steps |
 | `run1.json` | A clean validated run (Sapiens) |
 | `run2.json` | A clean validated run (Murder on the Orient Express) |
+| `run3-out-of-stock.json` | A clean validated run against a genuinely unavailable book — note the absent `price` field |
 | `heal-awaiting-approval.json` | A real heal parked at its approval gate, captured from `GET /dca/collectors/<id>/refactor_template/progress` |
 
 ## About `heal-awaiting-approval.json`
@@ -46,3 +47,19 @@ consumer renders. Two separate heals proposed this same regression, the second
 even after the generated prompt explicitly asked to keep the currency symbol.
 
 `diff.user` has been redacted; everything else is verbatim.
+
+## About `run3-out-of-stock.json`
+
+The page for this book reads "Temporarily Unavailable. We receive fewer than 1
+copy every 6 months.", shows no price, and offers Add to Wish List instead of Add
+to Cart. The collector normalises that to `availability_status: "Out of Stock"`
+and returns **no `price` field at all**.
+
+That is correct data, and it exposed a bug in Airlock's own rules: an
+unconditional `price.value > 0` rule blocked this response and would have fired a
+heal at a collector that was working perfectly. The price rules are now
+conditional on the book being purchasable — see `priceIsExpected` in
+[`../src/airlock/rules.js`](../src/airlock/rules.js).
+
+This row is also the reason the naive consumer app can be shown crashing on a
+completely live URL, with no fixture and no manufactured failure.

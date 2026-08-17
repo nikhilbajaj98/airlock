@@ -49,7 +49,53 @@ Both render the same card. Point out that the right-hand one adds a provenance
 line (`✓ live data, validated just now`) and nothing else. **Airlock is invisible
 when the scraper is working.** That is the point.
 
-## Act 2 — a broken response arrives
+## Act 2a — a live URL the naive app cannot survive
+
+No fixture, no manufactured failure, no heal. A real ThriftBooks page for a book
+with no copies in stock:
+
+```bash
+OOS=https://www.thriftbooks.com/w/waking-the-messiah_joanne-soper-cook/2618647/
+```
+
+The page reads "Temporarily Unavailable. We receive fewer than 1 copy every 6
+months." and shows no price, so the collector correctly returns no `price` field.
+
+Left terminal:
+
+```bash
+node src/naive/app.js --url "$OOS"
+```
+
+```
+TypeError: Cannot read properties of undefined (reading 'symbol')
+[exit 1]
+```
+
+Right terminal:
+
+```bash
+node src/protected/app.js --no-heal --url "$OOS"
+```
+
+```
+│ Title         Waking the Messiah                               │
+│ Author        JoAnne Soper-Cook                                │
+│ Price         not priced while out of stock                    │
+│ Availability  OUT OF STOCK                                     │
+├────────────────────────────────────────────────────────────────┤
+│ ✓ live data, validated just now                                │
+│   not checked: price, currency, symbol (out of stock)          │
+```
+
+This is the strongest single moment in the demo, because nothing about it is
+staged. It also has a story attached worth telling: Airlock's *own rules* got this
+wrong at first. An unconditional `price > 0` rule blocked this correct response and
+would have fired a heal at a perfectly healthy collector — the exact false alarm
+the project exists to avoid causing. Rules now carry an `appliesWhen` condition,
+and whatever is stood down for a row gets reported rather than silently skipped.
+
+## Act 2b — a broken response arrives
 
 `fixtures/broken-price-null.json` replays the failure mode this project hit for
 real: a price selector goes dead and the field comes back `null` while the

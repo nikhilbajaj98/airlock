@@ -24,6 +24,7 @@
 //   node src/protected/app.js --force-heal       # ignore the heal cooldown
 
 import { fetchThroughAirlock } from '../airlock/index.js';
+import { priceIsExpected } from '../airlock/rules.js';
 import { DEFAULT_URL } from '../config.js';
 import { box, dim, divider, fieldLine, formatAge, green, red, textLine, yellow } from '../ui.js';
 
@@ -194,10 +195,18 @@ function fieldLines(row) {
 
   // Safe without guards because this row passed validation. That is the trade
   // Airlock offers: validate once at the boundary, then trust the data inside.
+  //
+  // The one field read conditionally is price, and the condition is the same
+  // function the rules use — so the app trusts exactly what the contract
+  // guarantees, no more. An out-of-stock book has no price, and that is correct.
+  const price = priceIsExpected(row)
+    ? `${row.price.symbol}${row.price.value.toFixed(2)} ${row.price.currency}`
+    : dim('not priced while out of stock');
+
   return [
     fieldLine('Title', row.book_title.trim()),
     fieldLine('Author', row.author_name.trim()),
-    fieldLine('Price', `${row.price.symbol}${row.price.value.toFixed(2)} ${row.price.currency}`),
+    fieldLine('Price', price),
     fieldLine('Availability', row.availability_status.toUpperCase()),
   ];
 }
@@ -229,6 +238,12 @@ function statusLines(result) {
   }
 
   if (result.error) lines.push(textLine(`  collector error: ${result.error}`));
+
+  // Say when part of the contract was stood down, so a partially-checked
+  // response never reads as a fully-checked one.
+  if (result.skipped?.length) {
+    lines.push(textLine(dim(`  not checked: ${result.skipped.join(', ')} (out of stock)`)));
+  }
 
   for (const failure of result.failures) {
     lines.push(textLine(`  blocked: ${failure.field} — expected ${failure.expectation}`));

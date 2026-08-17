@@ -76,6 +76,48 @@ test('availability is matched case-insensitively but only against known values',
   ]);
 });
 
+// --- out of stock: price is conditionally part of the contract --------------
+
+// Verbatim from a live run against a genuinely unavailable ThriftBooks page
+// ("Temporarily Unavailable. We receive fewer than 1 copy every 6 months.").
+// The page shows no price and the collector returns no price field. That is
+// correct data, so it must validate — demanding a price here made Airlock block
+// a good response and fire a heal at a healthy collector.
+const OUT_OF_STOCK_ROW = {
+  book_title: 'Waking the Messiah',
+  author_name: 'JoAnne Soper-Cook',
+  availability_status: 'Out of Stock',
+};
+
+test('a real out-of-stock row with no price at all is valid', () => {
+  const { valid, failures } = validateRow(OUT_OF_STOCK_ROW);
+  assert.equal(valid, true, `unexpected failures: ${JSON.stringify(failures)}`);
+});
+
+test('the price rules are recorded as skipped, not silently ignored', () => {
+  assert.deepEqual(validateRow(OUT_OF_STOCK_ROW).skipped, ['price', 'currency', 'symbol']);
+  assert.deepEqual(validateRow(goodRow).skipped, []);
+});
+
+test('an in-stock row with no price still fails', () => {
+  // The exemption must be earned by being out of stock, not by omitting a price.
+  const row = { ...OUT_OF_STOCK_ROW, availability_status: 'In Stock' };
+  assert.deepEqual(failedRules(row), ['currency', 'price', 'symbol']);
+});
+
+test('a garbled availability value does not excuse a missing price', () => {
+  // If the stock state cannot be read, the strict reading applies: the response
+  // fails loudly rather than quietly standing down half the contract.
+  const row = { ...OUT_OF_STOCK_ROW, availability_status: 'Almost Gone, Only 1 Left!' };
+  assert.deepEqual(failedRules(row), ['availability', 'currency', 'price', 'symbol']);
+});
+
+test('out-of-stock matching tolerates capitalisation and padding', () => {
+  for (const value of ['out of stock', 'OUT OF STOCK', '  Out Of Stock  ']) {
+    assert.equal(validateRow({ ...OUT_OF_STOCK_ROW, availability_status: value }).valid, true);
+  }
+});
+
 test('a null row fails every rule rather than silently passing', () => {
   const { valid, failures } = validateRow(null);
   assert.equal(valid, false);
