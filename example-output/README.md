@@ -10,6 +10,7 @@ its heal lifecycle. Nothing here is hand-written.
 | `run2.json` | A clean validated run (Murder on the Orient Express) |
 | `run3-out-of-stock.json` | A clean validated run against a genuinely unavailable book — note the absent `price` field |
 | `heal-awaiting-approval.json` | A real heal parked at its approval gate, captured from `GET /dca/collectors/<id>/refactor_template/progress` |
+| `heal-approved-and-reverified.json` | A real heal whose proposed fix passed the gate, was approved, and was re-verified live |
 
 ## About `heal-awaiting-approval.json`
 
@@ -63,3 +64,21 @@ conditional on the book being purchasable — see `priceIsExpected` in
 
 This row is also the reason the naive consumer app can be shown crashing on a
 completely live URL, with no fixture and no manufactured failure.
+
+## About `heal-approved-and-reverified.json`
+
+A third real heal, triggered after the fix above. Unlike the first two, this
+proposal's `preview_result` satisfied every rule — including `price.symbol`,
+this time correctly present — so the pre-approval gate approved it
+automatically instead of rejecting it. Note `save_new_template` in
+`completed_steps`: that step only appears when a heal is approved with
+`auto_save`, which is how this payload can be told apart from a rejection at a
+glance.
+
+Airlock then re-ran the collector for real and re-validated the fresh response
+before switching back to live traffic (`outcome: 'healed_live'` in
+[`../src/airlock/index.js`](../src/airlock/index.js)). A follow-up live run
+confirmed the collector still validates cleanly. Together with the rejection
+above, this shows the gate discriminating correctly in both directions —
+turning down a fix that breaks the contract, and accepting one that doesn't —
+rather than being a gate that has simply never seen a good fix to accept.

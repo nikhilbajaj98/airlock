@@ -170,16 +170,26 @@ during the submission window.
 
 Honesty matters more here than a tidy story.
 
-**Observed live against the real collector:** detect → block → serve
-last-known-good → generate prompt → trigger heal → follow the flow to its
-approval gate → validate the proposed output → reject it → app still serving,
-exit 0. This ran twice, once human-answered and once fully autonomous.
+**Observed live against the real collector, both branches of the gate:**
 
-**Not observed live:** the approve → re-verify → resume-live tail. Both real
-heals so far proposed output that broke the contract, so the gate rejected both
-and the approval path never executed against the API. It is implemented in
-[`src/airlock/index.js`](src/airlock/index.js) and unit-tested, but it has not
-been demonstrated end to end and is not claimed as such.
+- *Reject:* detect → block → serve last-known-good → generate prompt →
+  trigger heal → follow the flow to its approval gate → validate the proposed
+  output → reject it → collector left untouched → app still serving, exit 0.
+  Happened twice — once human-answered, once fully autonomous — both times
+  because the proposed fix silently dropped `price.symbol`.
+- *Approve:* the same flow, but a third real heal proposed output that
+  satisfied every rule. The gate approved it automatically, Airlock re-ran the
+  collector for real, re-validated the fresh response, and only then resumed
+  live traffic (`outcome: 'healed_live'`) — see
+  [`example-output/heal-approved-and-reverified.json`](example-output/heal-approved-and-reverified.json)
+  for the captured payload (note `save_new_template` in `completed_steps`,
+  which only appears on an approved, saved heal).
+
+So the gate has now been shown to discriminate correctly in both directions —
+rejecting a fix that breaks the contract, and approving one that doesn't —
+rather than being a rejector that has simply never seen a fix worth accepting.
+Every branch in [`src/airlock/index.js`](src/airlock/index.js)'s `healCycle()`
+has now executed against the live API.
 
 **Both availability values are now confirmed live.** A genuinely unavailable book
 returns exactly `"Out of Stock"`

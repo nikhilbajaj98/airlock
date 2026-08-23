@@ -1,0 +1,28 @@
+{
+  "id": "ia_mt5l0ewq2f31g6v51f",
+  "step": "user_approval",
+  "completed_steps": [
+    "planner",
+    "control_preview_runner",
+    "code_fixer",
+    "step_preview_runner",
+    "request_fulfillment_validator",
+    "step_advance",
+    "user_approval",
+    "save_new_template"
+  ],
+  "status": "done",
+  "success": true,
+  "preview_result": [
+    {
+      "book_title": "Sapiens: A Brief History of Humankind",
+      "author_name": "Yuval Noah Harari",
+      "price": {
+        "value": 11.69,
+        "currency": "USD",
+        "symbol": "$"
+      },
+      "availability_status": "In Stock"
+    }
+  ]
+}

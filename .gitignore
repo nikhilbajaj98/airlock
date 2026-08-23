@@ -4,3 +4,6 @@ node_modules/
 
 # Airlock's local last-known-good store and heal logs (runtime state, not source)
 .airlock-state/
+
+# Internal deep-dive doc: written for the author, not for the public submission
+DEEP_DIVE.md
